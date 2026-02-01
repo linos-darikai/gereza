@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { HashbrownGoogle } from '@hashbrownai/google'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -124,6 +125,7 @@ export async function POST(req: NextRequest) {
                 'Connection': 'keep-alive'
             }
         })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (error: any) {
         console.error('=== Hashbrown API Critical Failure ===')
         console.error('Error message:', error?.message || error)
