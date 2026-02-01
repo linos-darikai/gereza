@@ -3,64 +3,116 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const runtime = 'nodejs'
 
+// Robust retry helper that handles both connection errors AND empty streams
+async function retryOperation<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+): Promise<T> {
+    let lastError: any;
+
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await operation();
+        } catch (error: any) {
+            lastError = error;
+            console.warn(`[API] Attempt ${i + 1} failed: ${error.message || error}`);
+
+            if (i < maxRetries - 1) {
+                const delay = baseDelay * Math.pow(2, i); // Exponential backoff
+                console.log(`[API] Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+
+    throw lastError;
+}
+
 export async function POST(req: NextRequest) {
+    console.log('[API] POST /api/hashbrown received');
     let body: any
 
     try {
         body = await req.json()
 
-        console.log('=== Hashbrown API Request (Gemini) ===')
-        console.log('Operation:', body.operation)
-        console.log('Model:', body.model)
-        console.log('System Prompt:', body.system?.substring(0, 100) + '...')
-        console.log('Messages count:', body.messages?.length)
-        console.log('Tools count:', body.tools?.length)
-
         if (!body.system) {
-            console.error('ERROR: No system prompt in request!')
             return NextResponse.json({ error: 'Missing system prompt' }, { status: 400 })
         }
 
         if (!process.env.GEMINI_KEY) {
-            console.error('ERROR: No GEMINI_KEY environment variable!')
+            console.error('[API] ERROR: No GEMINI_KEY environment variable!')
             return NextResponse.json({ error: 'Missing Gemini API key' }, { status: 500 })
         }
 
         // Use Hashbrown's Google adapter for Gemini streaming
-        const stream = HashbrownGoogle.stream.text({
-            apiKey: process.env.GEMINI_KEY,
-            request: body
-        })
+        console.log('[API] initializing Gemini stream...');
 
-        // Collect all chunks for debugging
-        const chunks: Uint8Array[] = []
+        // Wrap stream creation in retry logic
+        const reliableStream = await retryOperation(async () => {
+            const stream = HashbrownGoogle.stream.text({
+                apiKey: process.env.GEMINI_KEY!,
+                request: body
+            })
+
+            // CRITICAL: Peek at the first chunk to ensure the stream is alive and not empty.
+            // Many "silent failures" are actually 200 OK responses with empty bodies.
+            const iterator = stream[Symbol.asyncIterator]();
+            let firstResult;
+            try {
+                firstResult = await iterator.next();
+            } catch (err) {
+                console.warn('[API] Stream initialization failed (network error?):', err);
+                throw err;
+            }
+
+            if (firstResult.done) {
+                // Throwing here triggers the retry loop!
+                throw new Error("Received empty response from AI services");
+            }
+
+            // Return a new async iterable that stitches the first chunk back onto the stream
+            return {
+                async *[Symbol.asyncIterator]() {
+                    yield firstResult.value;
+                    while (true) {
+                        const { value, done } = await iterator.next();
+                        if (done) break;
+                        yield value;
+                    }
+                }
+            };
+        }, 3, 1000);
+
+        console.log('[API] Gemini stream initialized and verified successfully');
 
         // Create a readable stream for Next.js App Router
         const readableStream = new ReadableStream({
             async start(controller) {
+                console.log('[API] Starting response stream to client');
                 try {
-                    for await (const chunk of stream) {
-                        chunks.push(chunk)
-                        controller.enqueue(chunk)
+                    for await (const chunk of reliableStream) {
+                        try {
+                            controller.enqueue(chunk)
+                        } catch (err) {
+                            console.warn('[API] Client disconnected during stream');
+                            return
+                        }
                     }
-
-                    // Debug: log the full response
-                    const fullResponse = Buffer.concat(chunks).toString('utf-8')
-                    console.log('=== Gemini Response Preview ===')
-                    console.log(fullResponse.substring(0, 500))
-                    if (fullResponse.length > 500) {
-                        console.log(`... (${fullResponse.length} total characters)`)
-                    }
+                    console.log('[API] Stream completed successfully');
                 } catch (streamError: any) {
-                    console.error('Hashbrown Stream Error:', streamError?.message || streamError)
-                    console.error('Stream Error Details:', streamError)
+                    console.error('[API] Stream Broken:', streamError?.message || streamError)
+                    try {
+                        controller.error(streamError)
+                    } catch (e) {
+                        // ignore
+                    }
                 } finally {
                     try {
                         controller.close()
                     } catch (closeError) {
-                        // Controller might already be closed
+                        // ignore
                     }
-                    console.log('=== Gemini Stream completed ===')
                 }
             }
         })
@@ -73,12 +125,12 @@ export async function POST(req: NextRequest) {
             }
         })
     } catch (error: any) {
-        console.error('=== Hashbrown API Error ===')
+        console.error('=== Hashbrown API Critical Failure ===')
         console.error('Error message:', error?.message || error)
-        console.error('Error stack:', error?.stack)
+
         return NextResponse.json(
-            { error: error?.message || 'Failed to generate response' },
-            { status: 500 }
+            { error: error?.message || 'Failed to generate response. The AI service is currently unavailable.' },
+            { status: 503 }
         )
     }
 }
