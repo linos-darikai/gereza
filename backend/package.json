@@ -1,12 +1,26 @@
 {
   "name": "backend",
-  "module": "index.ts",
+  "module": "game_server/index.ts",
   "type": "module",
-  "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "scripts": {
+    "dev": "bun --watch game_server/index.ts",
+    "start": "bun game_server/index.ts",
+    "build": "bun build game_server/index.ts --outdir dist --target bun"
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@colyseus/monitor": "^0.17.7",
+    "@colyseus/schema": "^4.0.7",
+    "@colyseus/sdk": "^0.17.25",
+    "@colyseus/ws-transport": "^0.17.8",
+    "colyseus": "^0.17.8",
+    "colyseus.js": "^0.16.22",
+    "express": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "bun-types": "latest"
   }
 }
