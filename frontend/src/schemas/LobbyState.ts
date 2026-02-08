@@ -7,7 +7,6 @@ export class Player extends Schema {
   @type("string") username: string = "";
   @type("string") characterName: string = "";
   @type("string") status: string = "pending";
-  @type("boolean") approved: boolean = false;
   @type("number") joinedAt: number = Date.now();
 }
 

@@ -183,19 +183,22 @@ interface SceneCardProps {
     title: string
     description: string
     imageUrl?: string
-    mood?: 'mysterious' | 'dangerous' | 'peaceful' | 'tense'
+    mood: string
 }
 
 function SceneCard({ title, description, imageUrl, mood = 'mysterious' }: SceneCardProps) {
-    const moodColors = {
+    const moodColors: Record<string, string> = {
         mysterious: 'from-purple-900/50 to-indigo-900/50 border-purple-500/30',
         dangerous: 'from-red-900/50 to-orange-900/50 border-red-500/30',
         peaceful: 'from-green-900/50 to-emerald-900/50 border-green-500/30',
         tense: 'from-yellow-900/50 to-amber-900/50 border-yellow-500/30'
     }
 
+    // Fallback if mood is invalid
+    const colorClass = moodColors[mood] || moodColors['mysterious']
+
     return (
-        <div className={`bg-gradient-to-br ${moodColors[mood]} border rounded-lg p-6 backdrop-blur-md shadow-xl animate-fadeIn mb-4`}>
+        <div className={`bg-gradient-to-br ${colorClass} border rounded-lg p-6 backdrop-blur-md shadow-xl animate-fadeIn mb-4`}>
             {imageUrl && (
                 <div className="mb-4 rounded-lg overflow-hidden border border-white/10 shadow-inner bg-black/50">
                     <img src={imageUrl} alt={title} className="w-full h-64 object-cover animate-fadeIn" />
@@ -211,7 +214,7 @@ interface DiceRollProps {
     result: number
     sides: number
     purpose: string
-    dc?: number
+    dc: number
 }
 
 function DiceRoll({ result, sides, purpose, dc = 15 }: DiceRollProps) {
@@ -239,20 +242,23 @@ function DiceRoll({ result, sides, purpose, dc = 15 }: DiceRollProps) {
 
 interface ActionButtonProps {
     label: string
-    description?: string
-    variant?: 'primary' | 'secondary' | 'danger'
+    description: string
+    variant: string
 }
 
 function ActionButton({ label, description, variant = 'primary' }: ActionButtonProps) {
-    const variantStyles = {
+    const variantStyles: Record<string, string> = {
         primary: 'bg-red-700/80 hover:bg-red-600 border-red-500/50 text-white',
         secondary: 'bg-gray-800/80 hover:bg-gray-700 border-gray-600/50 text-gray-200',
         danger: 'bg-orange-700/80 hover:bg-orange-600 border-orange-500/50 text-white'
     }
 
+    // Fallback if variant is invalid
+    const styleClass = variantStyles[variant] || variantStyles['primary']
+
     return (
         <button
-            className={`${variantStyles[variant]} border-l-4 rounded-r-lg p-4 w-full text-left cursor-pointer transition-all hover:translate-x-1 hover:shadow-lg mb-2 group`}
+            className={`${styleClass} border-l-4 rounded-r-lg p-4 w-full text-left cursor-pointer transition-all hover:translate-x-1 hover:shadow-lg mb-2 group`}
             onClick={() => {
                 const input = document.querySelector('input[type="text"]') as HTMLInputElement
                 if (input) {
@@ -275,13 +281,13 @@ function ActionButton({ label, description, variant = 'primary' }: ActionButtonP
 // ============================================================
 
 interface GameStateUpdateProps {
-    hpChange?: number
-    newStatus?: string
-    addItem?: { name: string; description: string; icon: string }
-    removeItem?: string
+    hpChange: number
+    newStatus: string
+    addItem: { name: string; description: string; icon: string } | null
+    removeItem: string
 }
 
-function GameStateUpdate({ hpChange, newStatus, addItem: newItem, removeItem: removeName }: GameStateUpdateProps) {
+function GameStateUpdate({ hpChange = 0, newStatus = "", addItem: newItem, removeItem: removeName = "" }: GameStateUpdateProps) {
     const { updateGameState, addItem, removeItem } = useGame()
     // Prevent double-execution in Strict Mode
     const hasRun = useRef(false)
@@ -290,19 +296,19 @@ function GameStateUpdate({ hpChange, newStatus, addItem: newItem, removeItem: re
         if (hasRun.current) return
         hasRun.current = true
 
-        if (hpChange) {
+        if (hpChange !== 0) {
             updateGameState(prev => ({
                 ...prev,
                 hp: Math.max(0, Math.min(prev.maxHp, prev.hp + hpChange))
             }))
         }
-        if (newStatus !== undefined) {
+        if (newStatus !== "") {
             updateGameState({ status: newStatus })
         }
         if (newItem) {
             addItem(newItem)
         }
-        if (removeName) {
+        if (removeName !== "") {
             removeItem(removeName)
         }
     }, [hpChange, newStatus, newItem, removeName, updateGameState, addItem, removeItem])
@@ -328,7 +334,7 @@ const exposedSceneCard = exposeComponent(SmartSceneCard, {
     props: {
         title: s.string('Title of the scene'),
         description: s.streaming.string('Vivid description'),
-        mood: s.enumeration('Atmosphere', ['mysterious', 'dangerous', 'peaceful', 'tense'] as const)
+        mood: s.string('Atmosphere: mysterious, dangerous, peaceful, tense')
     }
 })
 
@@ -349,22 +355,25 @@ const exposedActionButton = exposeComponent(ActionButton, {
     props: {
         label: s.string('Action text'),
         description: s.string('Potential outcome hint'),
-        variant: s.enumeration('Style variant', ['primary', 'secondary', 'danger'] as const)
+        variant: s.string('Style variant: primary, secondary, danger')
     }
 })
 
 const exposedGameStateUpdate = exposeComponent(GameStateUpdate, {
     name: 'GameStateUpdate',
-    description: 'CRITICAL: Updates the game HUD/Sidebar. Use this immediately when player takes damage, heals, gets items, etc.',
+    description: 'CRITICAL: Updates the game HUD/Sidebar. Use this immediately when player takes damage, heals, gets items, etc. Pass 0/empty string if no change.',
     props: {
-        hpChange: s.number('Change in HP (negative for damage)'),
-        newStatus: s.string('New status effect'),
-        addItem: s.object('Item to add', {
-            name: s.string('Name'),
-            description: s.string('Description'),
-            icon: s.string('Icon/Emoji')
-        }),
-        removeItem: s.string('Item name to remove')
+        hpChange: s.number('Change in HP (negative for damage). Pass 0 if no change.'),
+        newStatus: s.string('New status effect. Pass empty string if no change.'),
+        addItem: s.anyOf([
+            s.object('Item to add', {
+                name: s.string('Name'),
+                description: s.string('Description'),
+                icon: s.string('Icon/Emoji')
+            }),
+            s.nullish()
+        ]),
+        removeItem: s.string('Item name to remove. Pass empty string if no change.')
     }
 })
 
@@ -374,7 +383,7 @@ const exposedGameStateUpdate = exposeComponent(GameStateUpdate, {
 
 
 // --- Smart Scene Card for Image Generation ---
-function SmartSceneCard({ title, description, mood = 'mysterious' }: { title: string, description: string, mood?: 'mysterious' | 'dangerous' | 'peaceful' | 'tense' }) {
+function SmartSceneCard({ title, description, mood = 'mysterious' }: { title: string, description: string, mood: string }) {
     const [imageUrl, setImageUrl] = useState<string | null>(null)
     const [loading, setLoading] = useState(false) // Start false, only true when actually fetching
     const [error, setError] = useState(false)

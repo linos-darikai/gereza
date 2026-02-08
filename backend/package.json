@@ -11,11 +11,11 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@colyseus/monitor": "^0.17.7",
-    "@colyseus/schema": "^4.0.7",
-    "@colyseus/sdk": "^0.17.25",
-    "@colyseus/ws-transport": "^0.17.8",
-    "colyseus": "^0.17.8",
+    "@colyseus/monitor": "^0.16.0",
+    "@colyseus/core": "^0.16.0",
+    "@colyseus/schema": "^3.0.0",
+    "@colyseus/ws-transport": "^0.16.0",
+    "colyseus": "^0.16.0",
     "colyseus.js": "^0.16.22",
     "express": "^5.2.1"
   },

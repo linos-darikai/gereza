@@ -9,24 +9,31 @@ interface JoinOptions {
   isDM?: boolean;
 }
 
-export class LobbyRoom extends Room<{ state: LobbyState }> {
+export class LobbyRoom extends Room<LobbyState> {
   override maxClients = 7;
 
-  override onCreate(options: { roomCode: string; dmId: string }) {
+  override onCreate(options: { roomCode?: string; isDM?: boolean }) {
     console.log("🎲 LobbyRoom onCreate called with:", options);
 
-    // Set the roomId to match the invite code
-    // This MUST be done before setState
-    this.roomId = options.roomCode;
+    // Set the roomId to match the invite code or generate one
+    this.roomId = options.roomCode || this.generateRoomId();
 
-    // Initialize state
     this.setState(new LobbyState());
-    this.state.roomCode = options.roomCode;
-    this.state.dmId = options.dmId;
+    this.state.roomCode = this.roomId;
+    // dmId will be set in onJoin when the DM connects
 
     console.log("✅ LobbyRoom created with ID:", this.roomId);
 
     this.setupMessageHandlers();
+  }
+
+  generateRoomId(): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 4; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
   }
 
   setupMessageHandlers() {
@@ -38,14 +45,11 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
       const player = this.state.players.get(data.playerId);
       if (player) {
+        player.approved = data.approved;
         player.status = data.approved ? "approved" : "rejected";
         console.log(`${data.approved ? '✅' : '❌'} Player ${player.username} ${player.status}`);
 
-        this.clients.forEach(c => {
-          if (c.sessionId === data.playerId) {
-            c.send("status-changed", { status: player.status });
-          }
-        });
+        // State update is automatic via Schema
       }
     });
 
@@ -67,7 +71,7 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
 
       const approvedPlayers: Player[] = [];
       this.state.players.forEach((p: Player) => {
-        if (p.status === "approved") approvedPlayers.push(p);
+        if (p.approved) approvedPlayers.push(p);
       });
 
       if (approvedPlayers.length === 0) {
@@ -88,30 +92,29 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
   override onJoin(client: Client, options: JoinOptions) {
     console.log(`👤 ${options.username} joining...`);
 
+    const player = new Player();
+    player.sessionId = client.sessionId;
+    player.userId = options.userId;
+    player.username = options.username;
+    player.characterName = options.characterName || "Unnamed Hero";
+    player.joinedAt = Date.now();
+
     if (options.isDM) {
       console.log("🎩 DM joined:", options.username);
-
-      client.send("joined-as-dm", {
-        roomCode: this.state.roomCode,
-        players: Array.from(this.state.players.values())
-      });
+      this.state.dmId = client.sessionId;
+      player.approved = true;
+      player.status = "approved"; // DM is always approved
     } else {
-      const player = new Player();
-      player.sessionId = client.sessionId;
-      player.userId = options.userId;
-      player.username = options.username;
-      player.characterName = options.characterName || "Unnamed Hero";
+      player.approved = false;
       player.status = "pending";
-      player.joinedAt = Date.now();
-
-      this.state.players.set(client.sessionId, player);
-
       console.log(`⏳ Player ${player.username} waiting for approval`);
+      client.send("waiting-approval", { message: "Waiting for DM approval..." });
+    }
 
-      client.send("waiting-approval", {
-        message: "Waiting for DM approval..."
-      });
+    this.state.players.set(client.sessionId, player);
 
+    // Notify DM of new player (if it's not the DM themselves joining)
+    if (!options.isDM) {
       this.clients.forEach(c => {
         if (c.sessionId === this.state.dmId) {
           c.send("player-joined", {
@@ -126,15 +129,15 @@ export class LobbyRoom extends Room<{ state: LobbyState }> {
     }
   }
 
-  override onLeave(client: Client, _code?: number) {
+  override onLeave(client: Client, consented?: boolean) {
     console.log(`👋 Client ${client.sessionId} left`);
 
     const player = this.state.players.get(client.sessionId);
 
     if (client.sessionId === this.state.dmId) {
-      console.log("🎩 DM left, closing room");
-      this.broadcast("dm-left", { message: "DM has left the session" });
-      this.disconnect();
+      console.log("🎩 DM left (temporarily?)");
+      this.broadcast("dm-left", { message: "DM disconnected. Waiting for return..." });
+      // IMPORTANT: Room is kept alive for DM refresh/rejoin.
     } else if (player) {
       this.state.players.delete(client.sessionId);
       console.log(`👋 Player ${player.username} left`);
