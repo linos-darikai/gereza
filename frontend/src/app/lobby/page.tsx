@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { client } from '../../lib/colyseus';
+import { useGame } from '../../hooks/useGameServer';
 import { Room, getStateCallbacks } from 'colyseus.js';
 import { MapSchema } from '@colyseus/schema';
 import { LobbyState, Player } from '../../schemas/LobbyState';
@@ -30,6 +31,37 @@ function LobbyContent() {
     const targetRoomCode = searchParams.get('roomCode');
 
     const runOnce = useRef(false);
+
+    // Fetch server data using our new hook
+    const { game: serverGameData, players: serverPlayers, refresh: refreshGameData } = useGame(room?.roomId);
+
+    // Merge server players with realtime players to get the complete picture
+    // We use serverPlayers as the base because it contains everyone (including disconnected)
+    // We use realtime players to know who is currently online
+    const mergedPlayers = serverPlayers.map(sp => {
+        const realtimePlayer = players.find(p => p.sessionId === sp.session_id);
+
+        // If we found a realtime player, use their status (connected)
+        // Otherwise, fallback to the database status (likely disconnected or left)
+        let status = sp.status;
+        if (realtimePlayer) {
+            status = 'connected';
+            // We could also check realtimePlayer.status if we wanted strictly what the room thinks,
+            // but simply being in the room players list means they are connected.
+        }
+
+        return {
+            sessionId: sp.session_id,
+            username: sp.player?.username || "Unknown",
+            characterName: sp.player?.character_name || "Unknown",
+            status: status,
+            isDm: room?.state && (room.state as any).dmId === sp.session_id // Check if this player is DM
+        };
+    });
+
+    // If we have no server players yet (initial load), fall back to just realtime players
+    // This prevents empty list while fetching
+    const displayPlayers = serverPlayers.length > 0 ? mergedPlayers : players;
 
     useEffect(() => {
         if (!username || !characterName) {
@@ -97,7 +129,7 @@ function LobbyContent() {
                     setPlayers(currentPlayers);
 
                     if (state.gameStarted) {
-                        router.push('/game');
+                        router.push(`/game?roomId=${newRoom.roomId}`); // Pass roomId to game page
                     }
                 });
 
@@ -154,28 +186,35 @@ function LobbyContent() {
         <div className="flex min-h-screen flex-col items-center p-8 bg-gradient-to-b from-stone-900 to-black text-stone-200 font-serif">
             <header className="mb-12 text-center">
                 <h1 className="text-4xl text-amber-600 font-bold tracking-wider mb-2">LOBBY</h1>
-                {roomCode && (
-                    <div className="font-mono bg-stone-800 border border-amber-900/50 px-6 py-2 rounded">
-                        ROOM CODE: <span className="text-2xl text-white font-bold tracking-widest ml-2">{roomCode}</span>
-                    </div>
-                )}
+                <div className="flex flex-col items-center gap-2">
+                    {roomCode && (
+                        <div className="font-mono bg-stone-800 border border-amber-900/50 px-6 py-2 rounded">
+                            ROOM CODE: <span className="text-2xl text-white font-bold tracking-widest ml-2">{roomCode}</span>
+                        </div>
+                    )}
+                    {serverGameData && (
+                        <div className="text-xs text-stone-600 font-mono">
+                            SESSION ID: {serverGameData.id}
+                        </div>
+                    )}
+                </div>
             </header>
 
             <div className="w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8">
 
                 {/* Players List */}
                 <div className="bg-stone-900/50 border border-stone-700 p-6 rounded min-h-[400px]">
-                    <h2 className="text-xl text-stone-400 border-b border-stone-700 pb-2 mb-4 font-mono uppercase">Prisoners ({players.length}/6)</h2>
+                    <h2 className="text-xl text-stone-400 border-b border-stone-700 pb-2 mb-4 font-mono uppercase">Prisoners ({displayPlayers.length}/{serverGameData?.max_players || 6})</h2>
                     <ul className="space-y-3">
-                        {players.map((p, i) => (
+                        {displayPlayers.map((p, i) => (
                             <li key={i} className="flex items-center justify-between bg-black/40 p-3 rounded border border-stone-800 animate-fadeIn">
                                 <div>
-                                    <span className="font-bold text-lg text-stone-200">{p.username}</span>
+                                    <span className={`font-bold text-lg ${p.status === 'connected' ? 'text-stone-200' : 'text-stone-500'}`}>{p.username}</span>
                                     <div className="text-xs text-stone-500 font-mono uppercase flex gap-2">
                                         <span>{p.characterName}</span>
                                         <span>•</span>
-                                        <span className={p.status === 'approved' ? 'text-green-500' : p.status === 'rejected' ? 'text-red-500' : 'text-amber-500'}>{p.status}</span>
-                                        {(room?.state as any)?.dmId === p.sessionId && (
+                                        <span className={p.status === 'approved' ? 'text-green-500' : p.status === 'rejected' ? 'text-red-500' : p.status === 'connected' ? 'text-green-400' : 'text-amber-500'}>{p.status}</span>
+                                        {(p as any).isDm && (
                                             <>
                                                 <span>•</span>
                                                 <span className="text-purple-400 font-bold">WARDEN (DM)</span>
@@ -200,7 +239,7 @@ function LobbyContent() {
                                             </button>
                                         </>
                                     )}
-                                    <div className={`h-2 w-2 rounded-full ${p.status === 'approved' ? 'bg-green-500 box-shadow-green' : 'bg-amber-500'}`}></div>
+                                    <div className={`h-2 w-2 rounded-full ${p.status === 'approved' ? 'bg-green-500 box-shadow-green' : p.status === 'connected' ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                 </div>
                             </li>
                         ))}
