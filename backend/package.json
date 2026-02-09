@@ -11,10 +11,11 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@colyseus/monitor": "^0.16.0",
     "@colyseus/core": "^0.16.0",
+    "@colyseus/monitor": "^0.16.0",
     "@colyseus/schema": "^3.0.0",
     "@colyseus/ws-transport": "^0.16.0",
+    "@google/generative-ai": "^0.24.1",
     "colyseus": "^0.16.0",
     "colyseus.js": "^0.16.22",
     "express": "^5.2.1"

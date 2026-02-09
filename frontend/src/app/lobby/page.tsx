@@ -127,10 +127,18 @@ function LobbyContent() {
                         });
                     }
                     setPlayers(currentPlayers);
+                });
 
-                    if (state.gameStarted) {
-                        router.push(`/game?roomId=${newRoom.roomId}`); // Pass roomId to game page
-                    }
+                // 🔥 Listen for game-starting message to get the gameRoomId
+                newRoom.onMessage("game-starting", (data: { gameRoomId: string; message: string }) => {
+                    console.log("Game starting! Navigating to:", data.gameRoomId);
+                    // 🔥 Pass credentials via URL params instead of localStorage (supports multi-tab testing)
+                    const params = new URLSearchParams({
+                        roomId: data.gameRoomId,
+                        username: username,
+                        characterName: characterName
+                    });
+                    router.push(`/game?${params.toString()}`);
                 });
 
                 // We can keep specific gameStarted listener if we want instant reaction, 

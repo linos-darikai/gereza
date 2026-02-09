@@ -9,6 +9,7 @@
         "@colyseus/monitor": "^0.16.0",
         "@colyseus/schema": "^3.0.0",
         "@colyseus/ws-transport": "^0.16.0",
+        "@google/generative-ai": "^0.24.1",
         "colyseus": "^0.16.0",
         "colyseus.js": "^0.16.22",
         "express": "^5.2.1",
@@ -56,6 +57,8 @@
     "@colyseus/uwebsockets-transport": ["@colyseus/uwebsockets-transport@0.17.12", "", { "dependencies": { "uWebSockets.js": "github:uNetworking/uWebSockets.js#v20.57.0" }, "peerDependencies": { "@colyseus/core": "0.17.x", "uwebsockets-express": "^1.4.1 || ^2.0.1" }, "optionalPeers": ["uwebsockets-express"] }, "sha512-5mCQRMQtQWaGpO4WCvuTS1QvRwE0WPRMhRtU2gjRFc7fbVVvyXPiRpGsWV5stjLhvsyd+Y05kL78oRQeYpVMfw=="],
 
     "@colyseus/ws-transport": ["@colyseus/ws-transport@0.16.5", "", { "dependencies": { "@types/ws": "^8.5.14", "ws": "^8.18.0" }, "peerDependencies": { "@colyseus/core": "0.16.x" } }, "sha512-5aOlTzEKPL9wBV9FX6BILHGZcxZU1mXJPiXfSLbKXw0buzOlO9i4iErPUaDOoww20BfdwlCItIrgl/8jIFO0QA=="],
+
+    "@google/generative-ai": ["@google/generative-ai@0.24.1", "", {}, "sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q=="],
 
     "@ioredis/commands": ["@ioredis/commands@1.5.0", "", {}, "sha512-eUgLqrMf8nJkZxT24JvVRrQya1vZkQh8BBeYNwGDqa5I0VUi8ACx7uFvAaLxintokpTenkK6DASvo/bvNbBGow=="],
 

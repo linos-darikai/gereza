@@ -132,11 +132,20 @@ export class LobbyRoom extends Room<LobbyState> {
         approvedPlayerCount: approvedPlayers.length,
       });
 
+      // 🔥 The gameRoomId is the same as the lobby roomCode - GameRoom will be created 
+      // when clients join with this code. Broadcast to all clients so they can join.
       this.broadcast("game-starting", {
-        message: "Game is starting! Transitioning to game room..."
+        message: "Game is starting! Transitioning to game room...",
+        gameRoomId: this.state.roomCode,  // Use the same room code
+        dmSessionId: this.state.dmId,
+        players: approvedPlayers.map(p => ({
+          sessionId: p.sessionId,
+          username: p.username,
+          characterName: p.characterName
+        }))
       });
 
-      console.log("🎮 Game started by DM");
+      console.log("🎮 Game started by DM, gameRoomId:", this.state.roomCode);
     });
   }
 

@@ -51,7 +51,7 @@ const gameServer = new Server({
 
 // Register rooms
 gameServer.define('lobby', LobbyRoom);
-gameServer.define('game', GameRoom);
+gameServer.define('game', GameRoom).filterBy(['roomCode']);  // 🔥 Group players by roomCode
 
 // Start WebSocket server
 gameServer.listen(PORT);

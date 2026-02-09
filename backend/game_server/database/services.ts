@@ -89,9 +89,15 @@ export class GameSessionService {
     roomCode?: string,
     maxPlayers: number = 6
   ): GameSession {
+    // 🔥 Use INSERT ... ON CONFLICT to handle when lobby transitions to game
+    // This updates the existing session if the room_id already exists
     const stmt = db.prepare(`
       INSERT INTO game_sessions (room_id, room_type, dm_id, room_code, status, max_players, created_at)
       VALUES (?, ?, ?, ?, 'active', ?, ?)
+      ON CONFLICT(room_id) DO UPDATE SET
+        room_type = excluded.room_type,
+        dm_id = COALESCE(excluded.dm_id, dm_id),
+        status = 'active'
       RETURNING *
     `);
 
